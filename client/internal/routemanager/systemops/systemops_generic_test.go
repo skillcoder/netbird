@@ -14,7 +14,6 @@ import (
 	"testing"
 
 	"github.com/pion/transport/v3/stdnet"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
