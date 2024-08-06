@@ -121,11 +121,11 @@ func createAndSetupDummyInterface(t *testing.T, intf string, ipAddressCIDR strin
 	t.Helper()
 
 	err := exec.Command("ifconfig", intf, "alias", ipAddressCIDR).Run()
-	require.NoError(t, err, "Failed to create loopback alias")
+	require.NoError(t, err, "Failed to create loopback alias: %s -> %s", ipAddressCIDR, intf)
 
 	t.Cleanup(func() {
 		err := exec.Command("ifconfig", intf, ipAddressCIDR, "-alias").Run()
-		assert.NoError(t, err, "Failed to remove loopback alias")
+		assert.NoError(t, err, "Failed to remove loopback alias: %s -> %s", ipAddressCIDR, intf)
 	})
 
 	return "lo0"

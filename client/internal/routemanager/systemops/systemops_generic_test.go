@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/pion/transport/v3/stdnet"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -362,10 +363,11 @@ func setupRouteAndCleanup(t *testing.T, r *SysOps, prefix netip.Prefix, intf *ne
 	t.Helper()
 
 	err := r.AddVPNRoute(prefix, intf)
-	require.NoError(t, err, "addVPNRoute should not return err")
+	require.NoError(t, err, "addVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	t.Cleanup(func() {
+		logrus.SetLevel(logrus.TraceLevel)
 		err = r.RemoveVPNRoute(prefix, intf)
-		assert.NoError(t, err, "removeVPNRoute should not return err")
+		assert.NoError(t, err, "removeVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	})
 }
 
