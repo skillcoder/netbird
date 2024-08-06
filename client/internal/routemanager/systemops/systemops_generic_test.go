@@ -365,7 +365,6 @@ func setupRouteAndCleanup(t *testing.T, r *SysOps, prefix netip.Prefix, intf *ne
 	err := r.AddVPNRoute(prefix, intf)
 	require.NoError(t, err, "addVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	t.Cleanup(func() {
-		logrus.SetLevel(logrus.TraceLevel)
 		err = r.RemoveVPNRoute(prefix, intf)
 		assert.NoError(t, err, "removeVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	})

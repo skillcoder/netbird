@@ -13,6 +13,7 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -86,6 +87,8 @@ var testCases = []testCase{
 func TestRouting(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			logrus.SetLevel(logrus.TraceLevel)
+
 			setupTestEnv(t)
 
 			filter := createBPFFilter(tc.destination)
