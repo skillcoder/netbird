@@ -7,10 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"time"
 	"net/netip"
 	"runtime"
 	"strconv"
+	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/libp2p/go-netroute"
@@ -251,10 +251,10 @@ func (r *SysOps) genericAddVPNRoute(prefix netip.Prefix, intf *net.Interface) er
 // addNonExistingRoute adds a new route to the vpn interface if it doesn't exist in the current routing table
 func (r *SysOps) addNonExistingRoute(prefix netip.Prefix, intf *net.Interface) error {
 	log.Tracef("try to add route: %s, %s", prefix, intf.Name)
-        if prefix.String() == "10.0.0.0/8" {
-	    log.Tracef("sleep %d", time.Second)
-            // time.Sleep(10 * time.Second)
-        }
+	if prefix.String() == "10.0.0.0/8" {
+		log.Tracef("sleep %d", time.Second)
+		// time.Sleep(10 * time.Second)
+	}
 
 	ok, err := existsInRouteTable(prefix)
 	if err != nil {
@@ -384,9 +384,10 @@ func GetNextHop(ip netip.Addr) (Nexthop, error) {
 
 	log.Debugf("Route for %s: interface %v nexthop %v, preferred source %v", ip, intf, gateway, preferredSrc)
 	if gateway == nil {
-		if runtime.GOOS == "freebsd" {
-			return Nexthop{Intf: intf}, nil
-		}
+		// FIXME: why do we add this?
+		// if runtime.GOOS == "freebsd" {
+		// 	return Nexthop{Intf: intf}, nil
+		// }
 
 		if preferredSrc == nil {
 			return Nexthop{}, vars.ErrRouteNotFound
