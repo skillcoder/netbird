@@ -384,10 +384,11 @@ func GetNextHop(ip netip.Addr) (Nexthop, error) {
 
 	log.Debugf("Route for %s: interface %v nexthop %v, preferred source %v", ip, intf, gateway, preferredSrc)
 	if gateway == nil {
-		// FIXME: why do we add this?
-		// if runtime.GOOS == "freebsd" {
-		// 	return Nexthop{Intf: intf}, nil
-		// }
+		// FIXME: try to return also proper interface IP
+		if runtime.GOOS == "freebsd" {
+			// return Nexthop{Intf: intf}, nil
+			log.Tracef("FreeBSD Nexthop for %s: intf %v, nil gateway, preferred source %v", ip, intf, preferredSrc)
+		}
 
 		if preferredSrc == nil {
 			return Nexthop{}, vars.ErrRouteNotFound
