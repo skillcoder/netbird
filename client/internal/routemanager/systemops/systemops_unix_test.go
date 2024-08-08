@@ -5,7 +5,6 @@ package systemops
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
