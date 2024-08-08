@@ -49,10 +49,6 @@ func TestAddRemoveRoutes(t *testing.T) {
 	}
 
 	for n, testCase := range testCases {
-		// todo resolve test execution on freebsd
-		if runtime.GOOS == "freebsd" {
-			t.Skip("skipping ", testCase.name, " on freebsd")
-		}
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
 
@@ -111,9 +107,6 @@ func TestAddRemoveRoutes(t *testing.T) {
 }
 
 func TestGetNextHop(t *testing.T) {
-	if runtime.GOOS == "freebsd" {
-		t.Skip("skipping on freebsd")
-	}
 	nexthop, err := GetNextHop(netip.MustParseAddr("0.0.0.0"))
 	if err != nil {
 		t.Fatal("shouldn't return error when fetching the gateway: ", err)
@@ -362,10 +355,10 @@ func setupRouteAndCleanup(t *testing.T, r *SysOps, prefix netip.Prefix, intf *ne
 	t.Helper()
 
 	err := r.AddVPNRoute(prefix, intf)
-	require.NoError(t, err, "addVPNRoute should not return err")
+	require.NoError(t, err, "addVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	t.Cleanup(func() {
 		err = r.RemoveVPNRoute(prefix, intf)
-		assert.NoError(t, err, "removeVPNRoute should not return err")
+		assert.NoError(t, err, "removeVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	})
 }
 

@@ -14,6 +14,7 @@ import (
 	"github.com/gopacket/gopacket/layers"
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/miekg/dns"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -85,12 +86,15 @@ var testCases = []testCase{
 }
 
 func TestRouting(t *testing.T) {
+	// todo resolve test execution on freebsd
+	if runtime.GOOS == "freebsd" {
+		t.Skip("skipping TestRouting on freebsd")
+	}
+
 	for _, tc := range testCases {
-		// todo resolve test execution on freebsd
-		if runtime.GOOS == "freebsd" {
-			t.Skip("skipping ", tc.name, " on freebsd")
-		}
 		t.Run(tc.name, func(t *testing.T) {
+			logrus.SetLevel(logrus.TraceLevel)
+
 			setupTestEnv(t)
 
 			filter := createBPFFilter(tc.destination)
