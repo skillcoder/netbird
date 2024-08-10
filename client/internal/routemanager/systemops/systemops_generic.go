@@ -251,7 +251,7 @@ func (r *SysOps) genericAddVPNRoute(prefix netip.Prefix, intf *net.Interface) er
 // addNonExistingRoute adds a new route to the vpn interface if it doesn't exist in the current routing table
 func (r *SysOps) addNonExistingRoute(prefix netip.Prefix, intf *net.Interface) error {
 	log.Tracef("try to add route: %s, %s", prefix, intf.Name)
-	if prefix.String() == "10.0.0.0/8" {
+	if prefix.String() == "192.168.91.223/31" {
 		log.Tracef("sleep %d", time.Second)
 		// time.Sleep(10 * time.Second)
 	}
