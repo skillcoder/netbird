@@ -117,6 +117,19 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 		return fmt.Errorf("unable to get the next hop for the default gateway address. error: %s", err)
 	}
 
+	// We do not support to route gateway IP to local address on FreeBSD
+	if nexthop.IP.IsValid() && prefix.Addr() == addr {
+		ok, err := isLocalIP(nexthop.IP)
+		if err != nil {
+			log.Warnf("failed to check local ip for %s: %v", nexthop.IP, fmt.Errorf("is local ip: %w", err))
+		}
+
+		if ok {
+			log.Debugf("Skipping adding a new route for gateway %s to local next-hop ip %s to prevent local routing loop", gatewayPrefix, nexthop.IP)
+			return nil
+		}
+	}
+
 	log.Debugf("Adding a new route for gateway %s with next hop %s", gatewayPrefix, nexthop.IP)
 	return r.addToRouteTable(gatewayPrefix, nexthop)
 }
@@ -514,4 +527,30 @@ func isVpnRoute(addr netip.Addr, vpnRoutes []netip.Prefix, localRoutes []netip.P
 
 	// Return true if the longest matching prefix is from vpnRoutes
 	return isVpn, longestPrefix
+}
+
+// isLocalIP check if ip is an ip of any local interface
+func isLocalIP(ip netip.Addr) (bool, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false, err
+	}
+
+	for _, tmp := range ifaces {
+		iface := tmp
+		ifaceAddrs, err := iface.Addrs()
+		if err != nil {
+			return false, err
+		}
+
+		for _, addr := range ifaceAddrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ipnet.IP.Equal(net.IP(ip.AsSlice())) {
+					return true, nil
+				}
+			}
+		}
+	}
+
+	return false, nil
 }
