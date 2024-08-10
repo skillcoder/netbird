@@ -117,17 +117,8 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 		return fmt.Errorf("unable to get the next hop for the default gateway address. error: %s", err)
 	}
 
-	// We do not support to route gateway IP to local address on FreeBSD
-	if nexthop.IP.IsValid() && prefix.Addr() == addr {
-		ok, err := isLocalIP(nexthop.IP)
-		if err != nil {
-			log.Warnf("failed to check local ip for %s: %v", nexthop.IP, fmt.Errorf("is local ip: %w", err))
-		}
-
-		if ok {
-			log.Debugf("Skipping adding a new route for gateway %s to local next-hop ip %s to prevent local routing loop", gatewayPrefix, nexthop.IP)
-			return nil
-		}
+	if skip := shouldSkipRouteDefaultGatewayToLocalIP(prefix, gatewayPrefix, nexthop.IP); skip {
+		return nil
 	}
 
 	log.Debugf("Adding a new route for gateway %s with next hop %s", gatewayPrefix, nexthop.IP)
@@ -553,4 +544,34 @@ func isLocalIP(ip netip.Addr) (bool, error) {
 	}
 
 	return false, nil
+}
+
+// shouldSkipRouteDefaultGatewayToLocalIP avoid adding route to default gateway via local ip
+//
+//	this required to avoid route loop on FreeBSD
+func shouldSkipRouteDefaultGatewayToLocalIP(prefix, gatewayPrefix netip.Prefix, nexthopIP netip.Addr) bool {
+	// proceed if nexthop ip undefined
+	if !nexthopIP.IsValid() {
+		return false
+	}
+
+	// proceed if route prefix not equal to default gateway ip
+	if prefix.Addr() != gatewayPrefix.Addr() {
+		return false
+	}
+
+	isLocal, err := isLocalIP(nexthopIP)
+	if err != nil {
+		log.Warnf("Failed to check if %s is a local IP: %v", nexthopIP, fmt.Errorf("is local IP: %w", err))
+		return false
+	}
+
+	// skip if route to local ip
+	if isLocal {
+		log.Debugf("Skipping route addition to prevent local routing loop: gateway %s to local next-hop IP %s", gatewayPrefix, nexthopIP)
+		return true
+	}
+
+	// proceed if route to non-local ip
+	return false
 }
