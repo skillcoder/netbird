@@ -93,7 +93,7 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 
 	// prefix not overlap with Default Gateway IP (nexthop.IP)
 	if !prefix.Contains(nexthop.IP) {
-		log.Debugf("Skipping adding a new route for gateway %s because it is not in the network %s", nexthop.IP, prefix)
+		log.Debugf("Skipping adding a new route for default gateway IP %s because it does not overlap with route prefix %s", nexthop.IP, prefix)
 		return nil
 	}
 
@@ -104,7 +104,7 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 
 	ok, err := existsInRouteTable(gatewayPrefix)
 	if err != nil {
-		return fmt.Errorf("unable to check if there is an existing route for gateway %s. error: %s", gatewayPrefix, err)
+		return fmt.Errorf("unable to check if there is an existing route for gateway %s. error: %w", gatewayPrefix, err)
 	}
 
 	if ok {
@@ -117,11 +117,12 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 		return fmt.Errorf("unable to get the next hop for the default gateway address. error: %s", err)
 	}
 
-	if skip := shouldSkipRouteDefaultGatewayToLocalIP(nexthop.IP); skip {
-		return nil
+	if err := shouldSkipRouteDefaultGatewayToLocalIP(nexthop.IP); err != nil {
+		return fmt.Errorf("should skip: %w", err)
 	}
 
 	log.Debugf("Adding a new route for gateway %s with next hop %s", gatewayPrefix, nexthop.IP)
+
 	return r.addToRouteTable(gatewayPrefix, nexthop)
 }
 
@@ -272,6 +273,12 @@ func (r *SysOps) addNonExistingRoute(prefix netip.Prefix, intf *net.Interface) e
 
 	if ok {
 		if err := r.addRouteForCurrentDefaultGateway(prefix); err != nil {
+			if errors.Is(err, errRouteDefaultGatewayToLocalIP) {
+				log.Warnf("Skipping adding route for current default gateway IP. Error: %s", err)
+
+				return nil
+			}
+
 			log.Warnf("Unable to add route for current default gateway route. Will proceed without it. error: %s", err)
 		}
 	}
@@ -539,24 +546,24 @@ func isLocalIP(ip netip.Addr) (bool, error) {
 // shouldSkipRouteDefaultGatewayToLocalIP avoid adding route to default gateway via local ip
 //
 //	this required to avoid route loop on FreeBSD or on linux while using legacy routing
-func shouldSkipRouteDefaultGatewayToLocalIP(nexthopIP netip.Addr) bool {
+func shouldSkipRouteDefaultGatewayToLocalIP(nexthopIP netip.Addr) error {
 	// proceed if nexthop ip undefined
 	if !nexthopIP.IsValid() {
-		return false
+		return nil
 	}
 
 	isLocal, err := isLocalIP(nexthopIP)
 	if err != nil {
 		log.Warnf("Failed to check if %s is a local IP: %v", nexthopIP, fmt.Errorf("is local IP: %w", err))
-		return false
+		return nil
 	}
 
 	// skip if route to local ip
 	if isLocal {
 		log.Debugf("Skipping route addition to default gateway to prevent routing loop to local next-hop IP %s", nexthopIP)
-		return true
+		return errRouteDefaultGatewayToLocalIP
 	}
 
 	// proceed if route to non-local ip
-	return false
+	return nil
 }
