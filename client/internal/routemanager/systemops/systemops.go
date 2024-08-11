@@ -15,6 +15,14 @@ type Nexthop struct {
 	Intf *net.Interface
 }
 
+func (nh Nexthop) String() string {
+	if !nh.IP.IsValid() {
+		return nh.Intf.Name
+	}
+
+	return nh.IP.String() + " " + nh.Intf.Name
+}
+
 type ExclusionCounter = refcounter.Counter[any, Nexthop]
 
 type SysOps struct {
