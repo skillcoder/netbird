@@ -80,6 +80,9 @@ func (r *SysOps) cleanupRefCounter() error {
 }
 
 // TODO: fix: for default our wg address now appears as the default gw
+// addRouteForCurrentDefaultGateway adding a separate route to just one specific default gateway IP,
+//
+//	to avoid lose internet connection for host if adding route which overlaped with current defalt gateway IP.
 func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 	addr := netip.IPv4Unspecified()
 	if prefix.Addr().Is6() {
