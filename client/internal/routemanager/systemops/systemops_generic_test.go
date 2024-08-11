@@ -216,6 +216,11 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 				require.NoError(t, err, "should not return err when adding pre-existing route")
 			}
 
+			// FIXME: remove problematic routes before the tests to be able to properly check shoud not add cases
+			if !testCase.shouldAddRoute {
+				t.Log("should not add route check")
+			}
+
 			// Add the route
 			err = r.AddVPNRoute(testCase.prefix, intf)
 			require.NoError(t, err, "should not return err when adding route")
@@ -233,11 +238,6 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 
 			// route should either not have been added or should have been removed
 			// In case of already existing route, it should not have been added (but still exist)
-			// FIXME: remove problematic routes before the tests to be able to properly check shoud not add cases
-			if !testCase.shouldAddRoute {
-				t.Log("should not add route check")
-			}
-
 			ok, err := existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "should not return err")
 
