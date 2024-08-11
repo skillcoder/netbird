@@ -196,6 +196,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun53%d", n), "100.65.75.2/24", 33100, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
 			require.NoError(t, err, "should create testing WGIface interface")
 			defer wgInterface.Close()
@@ -232,10 +233,15 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 
 			// route should either not have been added or should have been removed
 			// In case of already existing route, it should not have been added (but still exist)
+			// FIXME: remove problematic routes before the tests to be able to properly check shoud not add cases
+			if !testCase.shouldAddRoute {
+				t.Log("should not add route check")
+			}
+
 			ok, err := existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "should not return err")
 
-			require.False(t, ok, "route should not exist")
+			require.False(t, ok, "route should not exist: %s", testCase.prefix)
 		})
 	}
 }
