@@ -81,16 +81,17 @@ func (r *SysOps) cleanupRefCounter() error {
 
 // TODO: fix: for default our wg address now appears as the default gw
 func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
-	defaultGatewayIP := netip.IPv4Unspecified()
+	addr := netip.IPv4Unspecified()
 	if prefix.Addr().Is6() {
-		defaultGatewayIP = netip.IPv6Unspecified()
+		addr = netip.IPv6Unspecified()
 	}
 
-	nexthop, err := GetNextHop(defaultGatewayIP)
+	nexthop, err := GetNextHop(addr)
 	if err != nil && !errors.Is(err, vars.ErrRouteNotFound) {
 		return fmt.Errorf("get existing route gateway: %s", err)
 	}
 
+	// prefix not overlap with Default Gateway IP (nexthop.IP)
 	if !prefix.Contains(nexthop.IP) {
 		log.Debugf("Skipping adding a new route for gateway %s because it is not in the network %s", nexthop.IP, prefix)
 		return nil
@@ -116,7 +117,7 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 		return fmt.Errorf("unable to get the next hop for the default gateway address. error: %s", err)
 	}
 
-	if skip := shouldSkipRouteDefaultGatewayToLocalIP(prefix, defaultGatewayIP, nexthop.IP); skip {
+	if skip := shouldSkipRouteDefaultGatewayToLocalIP(nexthop.IP); skip {
 		return nil
 	}
 
@@ -538,14 +539,9 @@ func isLocalIP(ip netip.Addr) (bool, error) {
 // shouldSkipRouteDefaultGatewayToLocalIP avoid adding route to default gateway via local ip
 //
 //	this required to avoid route loop on FreeBSD or on linux while using legacy routing
-func shouldSkipRouteDefaultGatewayToLocalIP(prefix netip.Prefix, gatewayIP, nexthopIP netip.Addr) bool {
+func shouldSkipRouteDefaultGatewayToLocalIP(nexthopIP netip.Addr) bool {
 	// proceed if nexthop ip undefined
 	if !nexthopIP.IsValid() {
-		return false
-	}
-
-	// proceed if route prefix not owerlap with default gateway ip
-	if !prefix.Contains(gatewayIP) {
 		return false
 	}
 
@@ -557,7 +553,7 @@ func shouldSkipRouteDefaultGatewayToLocalIP(prefix netip.Prefix, gatewayIP, next
 
 	// skip if route to local ip
 	if isLocal {
-		log.Debugf("Skipping route addition to prevent local routing loop: gateway %s to local next-hop IP %s", gatewayIP, nexthopIP)
+		log.Debugf("Skipping route addition to default gateway to prevent routing loop to local next-hop IP %s", nexthopIP)
 		return true
 	}
 
