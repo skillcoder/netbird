@@ -3,18 +3,14 @@
 package systemops
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"net/netip"
-	"os"
 	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/pion/transport/v3/stdnet"
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
@@ -191,12 +187,6 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 	}
 
 	for n, testCase := range testCases {
-
-		var buf bytes.Buffer
-		log.SetOutput(&buf)
-		defer func() {
-			log.SetOutput(os.Stderr)
-		}()
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("NB_USE_LEGACY_ROUTING", "true")
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
@@ -243,12 +233,9 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			// route should either not have been added or should have been removed
 			// In case of already existing route, it should not have been added (but still exist)
 			ok, err := existsInRouteTable(testCase.prefix)
-			t.Log("Buffer string: ", buf.String())
 			require.NoError(t, err, "should not return err")
 
-			if !strings.Contains(buf.String(), "because it already exists") {
-				require.False(t, ok, "route should not exist")
-			}
+			require.False(t, ok, "route should not exist")
 		})
 	}
 }
