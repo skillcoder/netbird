@@ -10,7 +10,6 @@ import (
 	"net/netip"
 	"runtime"
 	"strconv"
-	"time"
 
 	"github.com/hashicorp/go-multierror"
 	"github.com/libp2p/go-netroute"
@@ -254,11 +253,7 @@ func (r *SysOps) genericAddVPNRoute(prefix netip.Prefix, intf *net.Interface) er
 
 // addNonExistingRoute adds a new route to the vpn interface if it doesn't exist in the current routing table
 func (r *SysOps) addNonExistingRoute(prefix netip.Prefix, intf *net.Interface) error {
-	log.Tracef("try to add route: %s, %s", prefix, intf.Name)
-	if prefix.String() == "192.168.91.223/31" {
-		log.Tracef("sleep %d", time.Second)
-		// time.Sleep(10 * time.Second)
-	}
+	log.Tracef("try to add non-existing route for prefix %s, intf: %s", prefix, intf.Name)
 
 	ok, err := existsInRouteTable(prefix)
 	if err != nil {
@@ -388,12 +383,6 @@ func GetNextHop(ip netip.Addr) (Nexthop, error) {
 
 	log.Debugf("Route for %s: interface %v nexthop %v, preferred source %v", ip, intf, gateway, preferredSrc)
 	if gateway == nil {
-		// FIXME: try to return also proper interface IP
-		if runtime.GOOS == "freebsd" {
-			// return Nexthop{Intf: intf}, nil
-			log.Tracef("FreeBSD Nexthop for %s: intf %v, nil gateway, preferred source %v", ip, intf, preferredSrc)
-		}
-
 		if preferredSrc == nil {
 			return Nexthop{}, vars.ErrRouteNotFound
 		}
@@ -548,7 +537,7 @@ func isLocalIP(ip netip.Addr) (bool, error) {
 
 // shouldSkipRouteDefaultGatewayToLocalIP avoid adding route to default gateway via local ip
 //
-//	this required to avoid route loop on FreeBSD
+//	this required to avoid route loop on FreeBSD or on linux while using legacy routing
 func shouldSkipRouteDefaultGatewayToLocalIP(prefix, gatewayPrefix netip.Prefix, nexthopIP netip.Addr) bool {
 	// proceed if nexthop ip undefined
 	if !nexthopIP.IsValid() {
