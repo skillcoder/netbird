@@ -210,9 +210,19 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 
 			r := NewSysOps(wgInterface, nil)
 
+			// Check testing environment
+			// Every routes we using in this our tests should not exist
+			ok, err := existsInRouteTable(testCase.prefix)
+			require.NoError(t, err, "should not return err")
+			require.False(t, ok, "testing route should not exist before the test: %s", testCase.prefix)
+
 			// Prepare the environment
 			if testCase.preExistingPrefix.IsValid() {
-				err := r.AddVPNRoute(testCase.preExistingPrefix, intf)
+				ok, err := existsInRouteTable(testCase.preExistingPrefix)
+				require.NoError(t, err, "should not return err")
+				require.False(t, ok, "preExistingPrefix route should not exist before the test: %s", testCase.preExistingPrefix)
+
+				err = r.AddVPNRoute(testCase.preExistingPrefix, intf)
 				require.NoError(t, err, "should not return err when adding pre-existing route")
 			}
 
@@ -238,7 +248,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 
 			// route should either not have been added or should have been removed
 			// In case of already existing route, it should not have been added (but still exist)
-			ok, err := existsInRouteTable(testCase.prefix)
+			ok, err = existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "should not return err")
 
 			require.False(t, ok, "route should not exist: %s", testCase.prefix)
