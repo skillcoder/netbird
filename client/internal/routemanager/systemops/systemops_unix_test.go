@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"strings"
@@ -89,7 +90,9 @@ func TestRouting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			setupTestEnv(t)
+			ctx := context.Background()
+
+			setupTestEnv(ctx, t)
 
 			filter := createBPFFilter(tc.destination)
 			handle := startPacketCapture(t, tc.expectedInterface, filter)

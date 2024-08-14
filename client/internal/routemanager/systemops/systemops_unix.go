@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
@@ -16,23 +17,23 @@ import (
 	nbnet "github.com/netbirdio/netbird/util/net"
 )
 
-func (r *SysOps) SetupRouting(initAddresses []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
-	return r.setupRefCounter(initAddresses)
+func (r *SysOps) SetupRouting(ctx context.Context, initAddresses []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
+	return r.setupRefCounter(ctx, initAddresses)
 }
 
-func (r *SysOps) CleanupRouting() error {
-	return r.cleanupRefCounter()
+func (r *SysOps) CleanupRouting(ctx context.Context) error {
+	return r.cleanupRefCounter(ctx)
 }
 
-func (r *SysOps) addToRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
-	return r.routeCmd("add", prefix, nexthop)
+func (r *SysOps) addToRouteTable(ctx context.Context, prefix netip.Prefix, nexthop Nexthop) error {
+	return r.routeCmd(ctx, "add", prefix, nexthop)
 }
 
-func (r *SysOps) removeFromRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
-	return r.routeCmd("delete", prefix, nexthop)
+func (r *SysOps) removeFromRouteTable(ctx context.Context, prefix netip.Prefix, nexthop Nexthop) error {
+	return r.routeCmd(ctx, "delete", prefix, nexthop)
 }
 
-func (r *SysOps) routeCmd(action string, prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) routeCmd(ctx context.Context, action string, prefix netip.Prefix, nexthop Nexthop) error {
 	inet := "-inet"
 	if prefix.Addr().Is6() {
 		inet = "-inet6"

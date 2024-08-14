@@ -1,6 +1,7 @@
 package refcounter
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/netip"
@@ -20,8 +21,8 @@ type Ref[O any] struct {
 	Out   O
 }
 
-type AddFunc[I, O any] func(prefix netip.Prefix, in I) (out O, err error)
-type RemoveFunc[I, O any] func(prefix netip.Prefix, out O) error
+type AddFunc[I, O any] func(ctx context.Context, prefix netip.Prefix, in I) (out O, err error)
+type RemoveFunc[I, O any] func(ctx context.Context, prefix netip.Prefix, out O) error
 
 type Counter[I, O any] struct {
 	// refCountMap keeps track of the reference Ref for prefixes
@@ -46,7 +47,7 @@ func New[I, O any](add AddFunc[I, O], remove RemoveFunc[I, O]) *Counter[I, O] {
 
 // Increment increments the reference count for the given prefix.
 // If this is the first reference to the prefix, the AddFunc is called.
-func (rm *Counter[I, O]) Increment(prefix netip.Prefix, in I) (Ref[O], error) {
+func (rm *Counter[I, O]) Increment(ctx context.Context, prefix netip.Prefix, in I) (Ref[O], error) {
 	rm.refCountMu.Lock()
 	defer rm.refCountMu.Unlock()
 
@@ -56,7 +57,7 @@ func (rm *Counter[I, O]) Increment(prefix netip.Prefix, in I) (Ref[O], error) {
 	// Call AddFunc only if it's a new prefix
 	if ref.Count == 0 {
 		log.Tracef("Adding for prefix %s with [%v]", prefix, ref.Out)
-		out, err := rm.add(prefix, in)
+		out, err := rm.add(ctx, prefix, in)
 
 		if errors.Is(err, ErrIgnore) {
 			return ref, nil
@@ -75,11 +76,11 @@ func (rm *Counter[I, O]) Increment(prefix netip.Prefix, in I) (Ref[O], error) {
 
 // IncrementWithID increments the reference count for the given prefix and groups it under the given ID.
 // If this is the first reference to the prefix, the AddFunc is called.
-func (rm *Counter[I, O]) IncrementWithID(id string, prefix netip.Prefix, in I) (Ref[O], error) {
+func (rm *Counter[I, O]) IncrementWithID(ctx context.Context, id string, prefix netip.Prefix, in I) (Ref[O], error) {
 	rm.idMu.Lock()
 	defer rm.idMu.Unlock()
 
-	ref, err := rm.Increment(prefix, in)
+	ref, err := rm.Increment(ctx, prefix, in)
 	if err != nil {
 		return ref, fmt.Errorf("with ID: %w", err)
 	}
@@ -90,7 +91,7 @@ func (rm *Counter[I, O]) IncrementWithID(id string, prefix netip.Prefix, in I) (
 
 // Decrement decrements the reference count for the given prefix.
 // If the reference count reaches 0, the RemoveFunc is called.
-func (rm *Counter[I, O]) Decrement(prefix netip.Prefix) (Ref[O], error) {
+func (rm *Counter[I, O]) Decrement(ctx context.Context, prefix netip.Prefix) (Ref[O], error) {
 	rm.refCountMu.Lock()
 	defer rm.refCountMu.Unlock()
 
@@ -103,7 +104,7 @@ func (rm *Counter[I, O]) Decrement(prefix netip.Prefix) (Ref[O], error) {
 	log.Tracef("Decreasing ref count %d for prefix %s with [%v]", ref.Count, prefix, ref.Out)
 	if ref.Count == 1 {
 		log.Tracef("Removing for prefix %s with [%v]", prefix, ref.Out)
-		if err := rm.remove(prefix, ref.Out); err != nil {
+		if err := rm.remove(ctx, prefix, ref.Out); err != nil {
 			return ref, fmt.Errorf("remove for prefix %s: %w", prefix, err)
 		}
 		delete(rm.refCountMap, prefix)
@@ -117,13 +118,13 @@ func (rm *Counter[I, O]) Decrement(prefix netip.Prefix) (Ref[O], error) {
 
 // DecrementWithID decrements the reference count for all prefixes associated with the given ID.
 // If the reference count reaches 0, the RemoveFunc is called.
-func (rm *Counter[I, O]) DecrementWithID(id string) error {
+func (rm *Counter[I, O]) DecrementWithID(ctx context.Context, id string) error {
 	rm.idMu.Lock()
 	defer rm.idMu.Unlock()
 
 	var merr *multierror.Error
 	for _, prefix := range rm.idMap[id] {
-		if _, err := rm.Decrement(prefix); err != nil {
+		if _, err := rm.Decrement(ctx, prefix); err != nil {
 			merr = multierror.Append(merr, err)
 		}
 	}
@@ -133,7 +134,7 @@ func (rm *Counter[I, O]) DecrementWithID(id string) error {
 }
 
 // Flush removes all references and calls RemoveFunc for each prefix.
-func (rm *Counter[I, O]) Flush() error {
+func (rm *Counter[I, O]) Flush(ctx context.Context) error {
 	rm.refCountMu.Lock()
 	defer rm.refCountMu.Unlock()
 	rm.idMu.Lock()
@@ -143,7 +144,7 @@ func (rm *Counter[I, O]) Flush() error {
 	for prefix := range rm.refCountMap {
 		log.Tracef("Removing for prefix %s", prefix)
 		ref := rm.refCountMap[prefix]
-		if err := rm.remove(prefix, ref.Out); err != nil {
+		if err := rm.remove(ctx, prefix, ref.Out); err != nil {
 			merr = multierror.Append(merr, fmt.Errorf("remove for prefix %s: %w", prefix, err))
 		}
 	}

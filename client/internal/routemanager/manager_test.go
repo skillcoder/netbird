@@ -421,7 +421,7 @@ func TestManagerUpdateRoutes(t *testing.T) {
 			_, _, err = routeManager.Init()
 
 			require.NoError(t, err, "should init route manager")
-			defer routeManager.Stop()
+			defer routeManager.Stop(context.Background())
 
 			if testCase.removeSrvRouter {
 				routeManager.serverRouter = nil

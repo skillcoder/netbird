@@ -48,6 +48,8 @@ func TestAddRemoveRoutes(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
 
+			ctx := context.Background()
+
 			peerPrivateKey, _ := wgtypes.GeneratePrivateKey()
 			newNet, err := stdnet.NewNet()
 			if err != nil {
@@ -62,17 +64,17 @@ func TestAddRemoveRoutes(t *testing.T) {
 
 			r := NewSysOps(wgInterface, nil)
 
-			_, _, err = r.SetupRouting(nil)
+			_, _, err = r.SetupRouting(ctx, nil)
 			require.NoError(t, err)
 			t.Cleanup(func() {
-				assert.NoError(t, r.CleanupRouting())
+				assert.NoError(t, r.CleanupRouting(ctx))
 			})
 
 			index, err := net.InterfaceByName(wgInterface.Name())
 			require.NoError(t, err, "InterfaceByName should not return err")
 			intf := &net.Interface{Index: index.Index, Name: wgInterface.Name()}
 
-			err = r.AddVPNRoute(testCase.prefix, intf)
+			err = r.AddVPNRoute(ctx, testCase.prefix, intf)
 			require.NoError(t, err, "genericAddVPNRoute should not return err")
 
 			if testCase.shouldRouteToWireguard {
@@ -83,7 +85,7 @@ func TestAddRemoveRoutes(t *testing.T) {
 			exists, err := existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "existsInRouteTable should not return err")
 			if exists && testCase.shouldRouteToWireguard {
-				err = r.RemoveVPNRoute(testCase.prefix, intf)
+				err = r.RemoveVPNRoute(ctx, testCase.prefix, intf)
 				require.NoError(t, err, "genericRemoveVPNRoute should not return err")
 
 				prefixNexthop, err := GetNextHop(testCase.prefix.Addr())
@@ -191,6 +193,8 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			t.Setenv("NB_USE_LEGACY_ROUTING", "true")
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
 
+			ctx := context.Background()
+
 			peerPrivateKey, _ := wgtypes.GeneratePrivateKey()
 			newNet, err := stdnet.NewNet()
 			if err != nil {
@@ -222,7 +226,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 				require.NoError(t, err, "should not return err")
 				require.False(t, ok, "preExistingPrefix route should not exist before the test: %s", testCase.preExistingPrefix)
 
-				err = r.AddVPNRoute(testCase.preExistingPrefix, intf)
+				err = r.AddVPNRoute(ctx, testCase.preExistingPrefix, intf)
 				require.NoError(t, err, "should not return err when adding pre-existing route")
 			}
 
@@ -232,7 +236,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			}
 
 			// Add the route
-			err = r.AddVPNRoute(testCase.prefix, intf)
+			err = r.AddVPNRoute(ctx, testCase.prefix, intf)
 			require.NoError(t, err, "should not return err when adding route")
 
 			if testCase.shouldAddRoute {
@@ -242,7 +246,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 				require.True(t, ok, "route should exist")
 
 				// remove route again if added
-				err = r.RemoveVPNRoute(testCase.prefix, intf)
+				err = r.RemoveVPNRoute(ctx, testCase.prefix, intf)
 				require.NoError(t, err, "should not return err")
 			}
 
@@ -354,18 +358,18 @@ func createWGInterface(t *testing.T, interfaceName, ipAddressCIDR string, listen
 	return wgInterface
 }
 
-func setupRouteAndCleanup(t *testing.T, r *SysOps, prefix netip.Prefix, intf *net.Interface) {
+func setupRouteAndCleanup(ctx context.Context, t *testing.T, r *SysOps, prefix netip.Prefix, intf *net.Interface) {
 	t.Helper()
 
-	err := r.AddVPNRoute(prefix, intf)
+	err := r.AddVPNRoute(ctx, prefix, intf)
 	require.NoError(t, err, "addVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	t.Cleanup(func() {
-		err = r.RemoveVPNRoute(prefix, intf)
+		err = r.RemoveVPNRoute(ctx, prefix, intf)
 		assert.NoError(t, err, "removeVPNRoute should not return err: %s %s", prefix.String(), intf.Name)
 	})
 }
 
-func setupTestEnv(t *testing.T) {
+func setupTestEnv(ctx context.Context, t *testing.T) {
 	t.Helper()
 
 	setupDummyInterfacesAndRoutes(t)
@@ -376,10 +380,10 @@ func setupTestEnv(t *testing.T) {
 	})
 
 	r := NewSysOps(wgInterface, nil)
-	_, _, err := r.SetupRouting(nil)
+	_, _, err := r.SetupRouting(ctx, nil)
 	require.NoError(t, err, "setupRouting should not return err")
 	t.Cleanup(func() {
-		assert.NoError(t, r.CleanupRouting())
+		assert.NoError(t, r.CleanupRouting(ctx))
 	})
 
 	index, err := net.InterfaceByName(wgInterface.Name())
@@ -387,19 +391,19 @@ func setupTestEnv(t *testing.T) {
 	intf := &net.Interface{Index: index.Index, Name: wgInterface.Name()}
 
 	// default route exists in main table and vpn table
-	setupRouteAndCleanup(t, r, netip.MustParsePrefix("0.0.0.0/0"), intf)
+	setupRouteAndCleanup(ctx, t, r, netip.MustParsePrefix("0.0.0.0/0"), intf)
 
 	// 10.0.0.0/8 route exists in main table and vpn table
-	setupRouteAndCleanup(t, r, netip.MustParsePrefix("10.0.0.0/8"), intf)
+	setupRouteAndCleanup(ctx, t, r, netip.MustParsePrefix("10.0.0.0/8"), intf)
 
 	// 10.10.0.0/24 more specific route exists in vpn table
-	setupRouteAndCleanup(t, r, netip.MustParsePrefix("10.10.0.0/24"), intf)
+	setupRouteAndCleanup(ctx, t, r, netip.MustParsePrefix("10.10.0.0/24"), intf)
 
 	// 127.0.10.0/24 more specific route exists in vpn table
-	setupRouteAndCleanup(t, r, netip.MustParsePrefix("127.0.10.0/24"), intf)
+	setupRouteAndCleanup(ctx, t, r, netip.MustParsePrefix("127.0.10.0/24"), intf)
 
 	// unique route in vpn table
-	setupRouteAndCleanup(t, r, netip.MustParsePrefix("172.16.0.0/12"), intf)
+	setupRouteAndCleanup(ctx, t, r, netip.MustParsePrefix("172.16.0.0/12"), intf)
 }
 
 func assertWGOutInterface(t *testing.T, prefix netip.Prefix, wgIface *iface.WGIface, invert bool) {
