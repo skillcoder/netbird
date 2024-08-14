@@ -13,6 +13,9 @@ import (
 	"github.com/pion/transport/v3/stdnet"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 
 	"github.com/netbirdio/netbird/iface"
@@ -153,38 +156,44 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 		t.Fatal("shouldn't return error when fetching the gateway: ", err)
 	}
 	testCases := []struct {
-		name              string
-		prefix            netip.Prefix
-		preExistingPrefix netip.Prefix
-		shouldAddRoute    bool
+		name               string
+		prefix             netip.Prefix
+		preExistingPrefix  netip.Prefix
+		shouldAddRoute     bool
+		routeAlreadyExists bool
 	}{
 		{
-			name:           "Should Add And Remove random Route",
-			prefix:         netip.MustParsePrefix("99.99.99.99/32"),
-			shouldAddRoute: true,
+			name:               "Should Add And Remove random Route",
+			prefix:             netip.MustParsePrefix("99.99.99.99/32"),
+			shouldAddRoute:     true,
+			routeAlreadyExists: false,
 		},
 		{
-			name:           "Should Not Add Route if overlaps with default gateway",
-			prefix:         netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
-			shouldAddRoute: false,
+			name:               "Should Not Add Route if overlaps with default gateway",
+			prefix:             netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
+			shouldAddRoute:     false,
+			routeAlreadyExists: false,
 		},
 		{
-			name:              "Should Add Route if bigger network exists",
-			prefix:            netip.MustParsePrefix("100.100.100.0/24"),
-			preExistingPrefix: netip.MustParsePrefix("100.100.0.0/16"),
-			shouldAddRoute:    true,
+			name:               "Should Add Route if bigger network exists",
+			prefix:             netip.MustParsePrefix("100.100.100.0/24"),
+			preExistingPrefix:  netip.MustParsePrefix("100.100.0.0/16"),
+			shouldAddRoute:     true,
+			routeAlreadyExists: false,
 		},
 		{
-			name:              "Should Add Route if smaller network exists",
-			prefix:            netip.MustParsePrefix("100.100.0.0/16"),
-			preExistingPrefix: netip.MustParsePrefix("100.100.100.0/24"),
-			shouldAddRoute:    true,
+			name:               "Should Add Route if smaller network exists",
+			prefix:             netip.MustParsePrefix("100.100.0.0/16"),
+			preExistingPrefix:  netip.MustParsePrefix("100.100.100.0/24"),
+			shouldAddRoute:     true,
+			routeAlreadyExists: false,
 		},
 		{
-			name:              "Should Not Add Route if same network exists",
-			prefix:            netip.MustParsePrefix("100.100.0.0/16"),
-			preExistingPrefix: netip.MustParsePrefix("100.100.0.0/16"),
-			shouldAddRoute:    false,
+			name:               "Should Not Add Route if same network exists",
+			prefix:             netip.MustParsePrefix("100.100.0.0/16"),
+			preExistingPrefix:  netip.MustParsePrefix("100.100.0.0/16"),
+			shouldAddRoute:     false,
+			routeAlreadyExists: true,
 		},
 	}
 
@@ -192,6 +201,9 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("NB_USE_LEGACY_ROUTING", "true")
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
+
+			exporter, cleanup := setupInMemoryTracer()
+			defer cleanup()
 
 			ctx := context.Background()
 
@@ -254,8 +266,16 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			// In case of already existing route, it should not have been added (but still exist)
 			ok, err = existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "should not return err")
-
-			require.False(t, ok, "route should not exist: %s", testCase.prefix)
+			if !testCase.routeAlreadyExists {
+				require.False(t, ok, "route should not exist: %s", testCase.prefix)
+			} else {
+				// Retrieve the spans from the exporter
+				spans := exporter.GetSpans()
+				require.Equal(t, 1, len(spans), "should have tracing spans")
+				require.Equal(t, "addNonExistingRoute", spans[0].Name)
+				require.True(t, hasAttributeName(spans[0], "skipped-exist"))
+				// require.Equal(t, "addRouteForCurrentDefaultGateway", spans[1].Name)
+			}
 		})
 	}
 }
@@ -541,4 +561,30 @@ func TestIsVpnRoute(t *testing.T) {
 			assert.Equal(t, tt.expectedPrefix, matchedPrefix, "isVpnRoute should return expectedVpn prefix")
 		})
 	}
+}
+
+// setupInMemoryTracer sets up an in-memory tracer provider and returns the exporter for inspection.
+func setupInMemoryTracer() (*tracetest.InMemoryExporter, func()) {
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+
+	cleanup := func() {
+		_ = tp.Shutdown(context.Background())
+	}
+
+	return exporter, cleanup
+}
+
+// hasAttributeName checks if a span contains a specific attribute name
+func hasAttributeName(span tracetest.SpanStub, attrName string) bool {
+	for _, a := range span.Attributes {
+		if string(a.Key) == attrName {
+			return true
+		}
+	}
+
+	return false
 }

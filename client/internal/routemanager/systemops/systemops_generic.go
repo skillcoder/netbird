@@ -83,6 +83,11 @@ func (r *SysOps) cleanupRefCounter(ctx context.Context) error {
 // TODO: fix: for default our wg address now appears as the default gw
 // addRouteForCurrentDefaultGateway add a separate route with default gateway prefix IP to preserve internet connection.
 func (r *SysOps) addRouteForCurrentDefaultGateway(ctx context.Context, prefix netip.Prefix) error {
+	ctx, span := r.tracer.Start(ctx, "addRouteForCurrentDefaultGateway")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("prefix", prefix.String()))
+
 	addr := netip.IPv4Unspecified()
 	if prefix.Addr().Is6() {
 		addr = netip.IPv6Unspecified()
@@ -96,6 +101,8 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(ctx context.Context, prefix ne
 	// prefix not overlap with Default Gateway IP (nexthop.IP)
 	if !prefix.Contains(nexthop.IP) {
 		log.Debugf("Skipping adding a new route for default gateway IP %s because it does not overlap with route prefix %s", nexthop.IP, prefix)
+		span.SetAttributes(attribute.String("skipped-not-overlap", nexthop.String()))
+
 		return nil
 	}
 
@@ -111,6 +118,8 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(ctx context.Context, prefix ne
 
 	if ok {
 		log.Debugf("Skipping adding a new route for gateway %s because it already exists", gatewayPrefix)
+		span.SetAttributes(attribute.String("skipped-exist", gatewayPrefix.String()))
+
 		return nil
 	}
 
@@ -266,11 +275,7 @@ func (r *SysOps) addNonExistingRoute(ctx context.Context, prefix netip.Prefix, i
 	}
 	if ok {
 		log.Warnf("Skipping adding a new route for network %s because it already exists", prefix)
-
-		span.SetAttributes(
-			attribute.String("prefix", prefix.String()),
-			attribute.String("interface", intf.Name),
-		)
+		span.SetAttributes(attribute.String("skipped-exist", prefix.String()))
 
 		return nil
 	}
@@ -283,6 +288,8 @@ func (r *SysOps) addNonExistingRoute(ctx context.Context, prefix netip.Prefix, i
 	if ok {
 		if err := r.addRouteForCurrentDefaultGateway(ctx, prefix); err != nil {
 			log.Warnf("Unable to add route for current default gateway route. Will proceed without it. error: %s", err)
+
+			span.SetAttributes(attribute.String("warn-default-gateway", err.Error()))
 		}
 	}
 
