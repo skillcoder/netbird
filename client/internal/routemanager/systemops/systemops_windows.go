@@ -65,7 +65,7 @@ func (r *SysOps) CleanupRouting(ctx context.Context) error {
 	return r.cleanupRefCounter(ctx)
 }
 
-func (r *SysOps) addToRouteTable(ctx context.Context, prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) addToRouteTable(_ context.Context, prefix netip.Prefix, nexthop Nexthop) error {
 	if nexthop.IP.Zone() != "" && nexthop.Intf == nil {
 		zone, err := strconv.Atoi(nexthop.IP.Zone())
 		if err != nil {

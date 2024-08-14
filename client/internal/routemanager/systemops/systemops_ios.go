@@ -20,30 +20,30 @@ func (r *SysOps) SetupRouting(context.Context, []net.IP) (nbnet.AddHookFunc, nbn
 	return nil, nil, nil
 }
 
-func (r *SysOps) CleanupRouting(_ context.Context) error {
+func (r *SysOps) CleanupRouting(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.prefixes = make(map[netip.Prefix]struct{})
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 
-func (r *SysOps) AddVPNRoute(_ context.Context, prefix netip.Prefix, _ *net.Interface) error {
+func (r *SysOps) AddVPNRoute(ctx context.Context, prefix netip.Prefix, _ *net.Interface) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.prefixes[prefix] = struct{}{}
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 
-func (r *SysOps) RemoveVPNRoute(_ context.Context, prefix netip.Prefix, _ *net.Interface) error {
+func (r *SysOps) RemoveVPNRoute(ctx context.Context, prefix netip.Prefix, _ *net.Interface) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	delete(r.prefixes, prefix)
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 

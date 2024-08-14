@@ -180,7 +180,7 @@ func (r *SysOps) AddVPNRoute(ctx context.Context, prefix netip.Prefix, intf *net
 
 	// TODO remove this once we have ipv6 support
 	if prefix == vars.Defaultv4 {
-		if err := addUnreachableRoute(ctx, vars.Defaultv6, NetbirdVPNTableID); err != nil {
+		if err := addUnreachableRoute(vars.Defaultv6, NetbirdVPNTableID); err != nil {
 			return fmt.Errorf("add blackhole: %w", err)
 		}
 	}
@@ -276,7 +276,7 @@ func addRoute(prefix netip.Prefix, nexthop Nexthop, tableID int) error {
 // addUnreachableRoute adds an unreachable route for the specified IP family and routing table.
 // ipFamily should be netlink.FAMILY_V4 for IPv4 or netlink.FAMILY_V6 for IPv6.
 // tableID specifies the routing table to which the unreachable route will be added.
-func addUnreachableRoute(ctx context.Context, prefix netip.Prefix, tableID int) error {
+func addUnreachableRoute(prefix netip.Prefix, tableID int) error {
 	_, ipNet, err := net.ParseCIDR(prefix.String())
 	if err != nil {
 		return fmt.Errorf("parse prefix %s: %w", prefix, err)

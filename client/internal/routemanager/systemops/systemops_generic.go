@@ -178,7 +178,7 @@ func (r *SysOps) addRouteToNonVPNIntf(ctx context.Context, prefix netip.Prefix, 
 	return exitNextHop, nil
 }
 
-func (r *SysOps) isPrefixInLocalSubnets(ctx context.Context, prefix netip.Prefix) (bool, *net.IPNet) {
+func (r *SysOps) isPrefixInLocalSubnets(_ context.Context, prefix netip.Prefix) (bool, *net.IPNet) {
 	localInterfaces, err := net.Interfaces()
 	if err != nil {
 		log.Errorf("Failed to get local interfaces: %v", err)
