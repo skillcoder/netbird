@@ -32,7 +32,7 @@ jobs:
           run: |
             set -e -x
             # FIXME: revert
-            time go test -timeout 1m -failfast ./client/internal/routemanager/systemops/...
+            time go test -timeout 1m -failfast -tags unit,component,integration ./client/internal/routemanager/systemops/...
 
             # time go build -o netbird client/main.go
             # # check all component except management, since we do not support management server on freebsd

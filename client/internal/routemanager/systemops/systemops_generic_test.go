@@ -58,7 +58,7 @@ func TestAddRemoveRoutes(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun53%d", n), "100.65.75.2/24", 33100, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
+			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun53%d", n), "100.65.73.2/24", 33103, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
 			require.NoError(t, err, "should create testing WGIface interface")
 			defer wgInterface.Close()
 
@@ -149,51 +149,136 @@ func TestGetNextHop(t *testing.T) {
 	}
 }
 
+// NOTE: this test can't run in parallel with outer routing tests, since we check system shared route table
 func TestAddExistAndRemoveRoute(t *testing.T) {
 	defaultNexthop, err := GetNextHop(netip.MustParseAddr("0.0.0.0"))
 	t.Log("defaultNexthop: ", defaultNexthop)
 	if err != nil {
 		t.Fatal("shouldn't return error when fetching the gateway: ", err)
 	}
+
 	testCases := []struct {
-		name               string
-		prefix             netip.Prefix
-		preExistingPrefix  netip.Prefix
-		shouldAddRoute     bool
-		routeAlreadyExists bool
+		name              string
+		prefix            netip.Prefix
+		preExistingPrefix netip.Prefix
 	}{
 		{
-			name:               "Should Add And Remove random Route",
-			prefix:             netip.MustParsePrefix("99.99.99.99/32"),
-			shouldAddRoute:     true,
-			routeAlreadyExists: false,
+			name:   "Should Add And Remove random Route",
+			prefix: netip.MustParsePrefix("99.99.99.99/32"),
 		},
 		{
-			name:               "Should Not Add Route if overlaps with default gateway",
-			prefix:             netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
-			shouldAddRoute:     false,
-			routeAlreadyExists: false,
+			name:              "Should Add Route if bigger network exists",
+			prefix:            netip.MustParsePrefix("100.100.100.0/24"),
+			preExistingPrefix: netip.MustParsePrefix("100.100.0.0/16"),
 		},
 		{
-			name:               "Should Add Route if bigger network exists",
-			prefix:             netip.MustParsePrefix("100.100.100.0/24"),
-			preExistingPrefix:  netip.MustParsePrefix("100.100.0.0/16"),
-			shouldAddRoute:     true,
-			routeAlreadyExists: false,
+			name:              "Should Add Route if smaller network exists",
+			prefix:            netip.MustParsePrefix("100.100.0.0/16"),
+			preExistingPrefix: netip.MustParsePrefix("100.100.100.0/24"),
 		},
 		{
-			name:               "Should Add Route if smaller network exists",
-			prefix:             netip.MustParsePrefix("100.100.0.0/16"),
-			preExistingPrefix:  netip.MustParsePrefix("100.100.100.0/24"),
-			shouldAddRoute:     true,
-			routeAlreadyExists: false,
+			name:              "Should Add only prefix route if overlaps with default gateway if route alredy exist",
+			prefix:            netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
+			preExistingPrefix: netip.MustParsePrefix(defaultNexthop.IP.String() + "/32"),
 		},
+	}
+
+	for n, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			t.Setenv("NB_USE_LEGACY_ROUTING", "true")
+			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
+
+			ctx := context.Background()
+
+			initialRoutes, err := GetRoutesFromTable()
+			if err != nil {
+				t.Fatal(err, "GetRoutesFromTable")
+			}
+
+			expectedRoutesCount := len(initialRoutes)
+
+			peerPrivateKey, _ := wgtypes.GeneratePrivateKey()
+			newNet, err := stdnet.NewNet()
+			if err != nil {
+				t.Fatal(err, "stdnet.NewNet")
+			}
+
+			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun54%d", n), "100.65.74.2/24", 33104, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
+			require.NoError(t, err, "should create testing WGIface interface")
+			defer wgInterface.Close()
+
+			err = wgInterface.Create()
+			require.NoError(t, err, "should create testing wireguard interface")
+
+			index, err := net.InterfaceByName(wgInterface.Name())
+			require.NoError(t, err, "InterfaceByName should not return err")
+			intf := &net.Interface{Index: index.Index, Name: wgInterface.Name()}
+
+			r := NewSysOps(wgInterface, nil)
+
+			// Check testing environment
+			// Every routes we using in this our tests should not exist
+			ok, err := existsInRouteTable(testCase.prefix)
+			require.NoError(t, err, "should not return err")
+			require.False(t, ok, "testing route should not exist before the test: %s", testCase.prefix)
+
+			// Prepare the environment
+			if testCase.preExistingPrefix.IsValid() {
+				ok, err := existsInRouteTable(testCase.preExistingPrefix)
+				require.NoError(t, err, "should not return err")
+				require.False(t, ok, "preExistingPrefix route should not exist before the test: %s", testCase.preExistingPrefix)
+
+				err = r.AddVPNRoute(ctx, testCase.preExistingPrefix, intf)
+				require.NoError(t, err, "should not return err when adding pre-existing route")
+
+				routes, err := GetRoutesFromTable()
+				require.NoError(t, err, "preExistingPrefix GetRoutesFromTable should not return err")
+				expectedRoutesCount++
+				require.Equal(t, expectedRoutesCount, len(routes))
+			}
+
+			// Add the route
+			err = r.AddVPNRoute(ctx, testCase.prefix, intf)
+			require.NoError(t, err, "should not return err when adding route")
+
+			routes, err := GetRoutesFromTable()
+			require.NoError(t, err, "add GetRoutesFromTable should not return err")
+			expectedRoutesCount++
+			require.Equal(t, expectedRoutesCount, len(routes))
+
+			// test if route exists after adding
+			ok, err = existsInRouteTable(testCase.prefix)
+			require.NoError(t, err, "should not return err")
+			require.True(t, ok, "route should exist")
+
+			// remove route again if added
+			err = r.RemoveVPNRoute(ctx, testCase.prefix, intf)
+			require.NoError(t, err, "should not return err")
+
+			routes, err = GetRoutesFromTable()
+			require.NoError(t, err, "delete GetRoutesFromTable should not return err")
+			expectedRoutesCount--
+			require.Equal(t, expectedRoutesCount, len(routes))
+
+			// route should either not have been added or should have been removed
+			// In case of already existing route, it should not have been added (but still exist)
+			ok, err = existsInRouteTable(testCase.prefix)
+			require.NoError(t, err, "should not return err")
+			require.False(t, ok, "route should not exist: %s", testCase.prefix)
+		})
+	}
+}
+
+func TestShouldNotAddRoute(t *testing.T) {
+	testCases := []struct {
+		name              string
+		prefix            netip.Prefix
+		preExistingPrefix netip.Prefix
+	}{
 		{
-			name:               "Should Not Add Route if same network exists",
-			prefix:             netip.MustParsePrefix("100.100.0.0/16"),
-			preExistingPrefix:  netip.MustParsePrefix("100.100.0.0/16"),
-			shouldAddRoute:     false,
-			routeAlreadyExists: true,
+			name:              "Should Not Add Route if same network exists",
+			prefix:            netip.MustParsePrefix("100.100.0.0/16"),
+			preExistingPrefix: netip.MustParsePrefix("100.100.0.0/16"),
 		},
 	}
 
@@ -213,7 +298,7 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun53%d", n), "100.65.75.2/24", 33100, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
+			wgInterface, err := iface.NewWGIFace(fmt.Sprintf("utun56%d", n), "100.65.76.2/24", 33106, peerPrivateKey.String(), iface.DefaultMTU, newNet, nil, nil)
 			require.NoError(t, err, "should create testing WGIface interface")
 			defer wgInterface.Close()
 
@@ -242,39 +327,32 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 				require.NoError(t, err, "should not return err when adding pre-existing route")
 			}
 
-			// FIXME: remove problematic routes before the tests to be able to properly check shoud not add cases
-			if !testCase.shouldAddRoute {
-				t.Log("should not add route check")
-			}
-
 			// Add the route
 			err = r.AddVPNRoute(ctx, testCase.prefix, intf)
 			require.NoError(t, err, "should not return err when adding route")
-
-			if testCase.shouldAddRoute {
-				// test if route exists after adding
-				ok, err := existsInRouteTable(testCase.prefix)
-				require.NoError(t, err, "should not return err")
-				require.True(t, ok, "route should exist")
-
-				// remove route again if added
-				err = r.RemoveVPNRoute(ctx, testCase.prefix, intf)
-				require.NoError(t, err, "should not return err")
-			}
 
 			// route should either not have been added or should have been removed
 			// In case of already existing route, it should not have been added (but still exist)
 			ok, err = existsInRouteTable(testCase.prefix)
 			require.NoError(t, err, "should not return err")
-			if !testCase.routeAlreadyExists {
-				require.False(t, ok, "route should not exist: %s", testCase.prefix)
-			} else {
+			if testCase.preExistingPrefix.IsValid() {
 				// Retrieve the spans from the exporter
 				spans := exporter.GetSpans()
 				require.Equal(t, 1, len(spans), "should have tracing spans")
 				require.Equal(t, "addNonExistingRoute", spans[0].Name)
 				require.True(t, hasAttributeName(spans[0], "skipped-exist"))
 				// require.Equal(t, "addRouteForCurrentDefaultGateway", spans[1].Name)
+
+				// cleanup
+				err = r.RemoveVPNRoute(ctx, testCase.preExistingPrefix, intf)
+				require.NoError(t, err, "should not return err")
+
+				// route should have been removed, to restore previous state
+				ok, err = existsInRouteTable(testCase.preExistingPrefix)
+				require.NoError(t, err, "should not return err")
+				require.False(t, ok, "route should not exist: %s", testCase.preExistingPrefix)
+			} else {
+				require.False(t, ok, "route should not exist: %s", testCase.prefix)
 			}
 		})
 	}
