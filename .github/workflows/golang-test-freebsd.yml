@@ -30,6 +30,5 @@ jobs:
           # -e - to faile on first error
           run: |
             set -e -x
-# FIXME: revert
+            # FIXME: revert
             time go test -timeout 1m -failfast -tags unit,component,integration ./client/internal/routemanager/systemops/...
-
