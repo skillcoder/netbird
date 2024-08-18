@@ -84,6 +84,7 @@ var testCases = []testCase{
 	},
 }
 
+// NOTE(dirty): The test is too invasive as it modifies the default route during execution. It should only run in a Docker container or VM.
 func TestRouting(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
 
