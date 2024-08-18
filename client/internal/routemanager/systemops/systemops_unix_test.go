@@ -5,7 +5,6 @@ package systemops
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -88,10 +87,6 @@ var testCases = []testCase{
 // NOTE(dirty): The test is too invasive as it modifies the default route during execution. It should only run in a Docker container or VM.
 func TestRouting(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
-
-	if runtime.GOOS == "freebsd" {
-		t.Skip("skipping TestRouting on freebsd")
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
