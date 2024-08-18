@@ -90,6 +90,9 @@ func TestRouting(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("NB_USE_LEGACY_ROUTING", "true")
+			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
+
 			setupTestEnv(t)
 
 			filter := createBPFFilter(tc.destination)
