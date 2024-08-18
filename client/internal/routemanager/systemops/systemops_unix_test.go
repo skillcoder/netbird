@@ -5,7 +5,6 @@ package systemops
 import (
 	"fmt"
 	"net"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -87,11 +86,6 @@ var testCases = []testCase{
 
 func TestRouting(t *testing.T) {
 	logrus.SetLevel(logrus.TraceLevel)
-
-	// todo resolve test execution on freebsd
-	if runtime.GOOS == "freebsd" {
-		t.Skip("skipping TestRouting on freebsd")
-	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
