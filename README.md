@@ -1,4 +1,7 @@
 <p align="center">
+ <strong>:bangbang: This PR to check tests in the upstream master.</strong>
+</p>
+<p align="center">
  <strong>:hatching_chick: New Release! Device Posture Checks.</strong>
   <a href="https://docs.netbird.io/how-to/manage-posture-checks">
        Learn more
