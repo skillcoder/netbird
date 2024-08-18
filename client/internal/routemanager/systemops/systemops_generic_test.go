@@ -166,9 +166,9 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			shouldAddRoute: true,
 		},
 		{
-			name:           "Should Not Add Route if overlaps with default gateway",
+			name:           "Should Add Route if overlaps with default gateway",
 			prefix:         netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
-			shouldAddRoute: false,
+			shouldAddRoute: true,
 		},
 		{
 			name:              "Should Add Route if bigger network exists",
