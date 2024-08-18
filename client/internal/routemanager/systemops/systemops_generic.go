@@ -116,7 +116,10 @@ func (r *SysOps) addRouteForCurrentDefaultGateway(prefix netip.Prefix) error {
 		return fmt.Errorf("unable to get the next hop for the default gateway address. error: %s", err)
 	}
 
-	log.Debugf("Adding a new route for gateway %s with next hop %s", gatewayPrefix, nexthop.IP)
+	nexthop = normalizeDefaultGatewayNexthop(nexthop)
+
+	log.Debugf("Adding a new route for default gateway %s with next hop %s, to keep internet connection", gatewayPrefix, nexthop)
+
 	return r.addToRouteTable(gatewayPrefix, nexthop)
 }
 
@@ -377,10 +380,6 @@ func GetNextHop(ip netip.Addr) (Nexthop, error) {
 
 	log.Debugf("Route for %s: interface %v nexthop %v, preferred source %v", ip, intf, gateway, preferredSrc)
 	if gateway == nil {
-		if runtime.GOOS == "freebsd" {
-			return Nexthop{Intf: intf}, nil
-		}
-
 		if preferredSrc == nil {
 			return Nexthop{}, vars.ErrRouteNotFound
 		}
@@ -505,4 +504,60 @@ func isVpnRoute(addr netip.Addr, vpnRoutes []netip.Prefix, localRoutes []netip.P
 
 	// Return true if the longest matching prefix is from vpnRoutes
 	return isVpn, longestPrefix
+}
+
+// isLocalIP check if ip is an ip of any local interface
+func isLocalIP(ip netip.Addr) (bool, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false, err
+	}
+
+	for _, tmp := range ifaces {
+		iface := tmp
+		ifaceAddrs, err := iface.Addrs()
+		if err != nil {
+			return false, err
+		}
+
+		for _, addr := range ifaceAddrs {
+			if ipnet, ok := addr.(*net.IPNet); ok {
+				if ipnet.IP.Equal(net.IP(ip.AsSlice())) {
+					return true, nil
+				}
+			}
+		}
+	}
+
+	return false, nil
+}
+
+// normalizeDefaultGatewayNexthop return nexthop only with interface without IP in case of any problem with IP
+func normalizeDefaultGatewayNexthop(nexthop Nexthop) Nexthop {
+	if !nexthop.IP.IsValid() {
+		return nexthopInterface(nexthop)
+	}
+
+	// On FreeBSD we should not specify any IP for default route, only current interface, to avoid local route loop
+	if runtime.GOOS == "freebsd" {
+		return nexthopInterface(nexthop)
+	}
+
+	isLocal, err := isLocalIP(nexthop.IP)
+	if err != nil {
+		log.Warnf("failed to check if %s is a local IP: %s", nexthop.IP, err)
+		return nexthopInterface(nexthop)
+	}
+
+	if isLocal {
+		return nexthopInterface(nexthop)
+	}
+
+	return nexthop
+}
+
+func nexthopInterface(nexthop Nexthop) Nexthop {
+	return Nexthop{
+		Intf: nexthop.Intf,
+	}
 }
