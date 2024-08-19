@@ -100,7 +100,16 @@ func (l *Link) SetMTU(mtu int) error {
 
 // AssignAddr assigns an IP address and netmask to the network interface.
 func (l *Link) AssignAddr(ip, netmask string) error {
-	return l.setAddr(ip, netmask)
+	if err := l.setAddr(ip, netmask); err != nil {
+		return fmt.Errorf("set addr: %w", err)
+	}
+
+	// HACK: dummy ipv6 to avoid errors on adding ipv6 routes
+	if err := l.setAddr6("fe80::", "0x64"); err != nil {
+		log.Debugf("failed to add dummy ipv6 address: %s", err.Error())
+	}
+
+	return nil
 }
 
 func (l *Link) Up() error {
@@ -195,6 +204,21 @@ func (l *Link) setAddr(ip, netmask string) error {
 	var stderr bytes.Buffer
 
 	cmd := exec.Command("ifconfig", l.name, "inet", ip, "netmask", netmask)
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		log.Debugf("ifconfig out: %s", stderr.String())
+
+		return fmt.Errorf("set interface addr: %w", err)
+	}
+
+	return nil
+}
+
+func (l *Link) setAddr6(ip, netmask string) error {
+	var stderr bytes.Buffer
+
+	cmd := exec.Command("ifconfig", l.name, "inet6", ip, "netmask", netmask)
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
