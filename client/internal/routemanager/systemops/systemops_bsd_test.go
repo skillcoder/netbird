@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
@@ -43,8 +44,11 @@ func TestConcurrentRoutes(t *testing.T) {
 		wg.Add(1)
 		go func(ip netip.Addr) {
 			defer wg.Done()
+
+			ctx := context.Background()
 			prefix := netip.PrefixFrom(ip, 32)
-			if err := r.addToRouteTable(prefix, Nexthop{netip.Addr{}, intf}); err != nil {
+
+			if err := r.addToRouteTable(ctx, prefix, Nexthop{netip.Addr{}, intf}); err != nil {
 				t.Errorf("Failed to add route for %s: %v", prefix, err)
 			}
 		}(baseIP)
@@ -59,8 +63,11 @@ func TestConcurrentRoutes(t *testing.T) {
 		wg.Add(1)
 		go func(ip netip.Addr) {
 			defer wg.Done()
+
+			ctx := context.Background()
 			prefix := netip.PrefixFrom(ip, 32)
-			if err := r.removeFromRouteTable(prefix, Nexthop{netip.Addr{}, intf}); err != nil {
+
+			if err := r.removeFromRouteTable(ctx, prefix, Nexthop{netip.Addr{}, intf}); err != nil {
 				t.Errorf("Failed to remove route for %s: %v", prefix, err)
 			}
 		}(baseIP)
@@ -121,11 +128,11 @@ func createAndSetupDummyInterface(t *testing.T, intf string, ipAddressCIDR strin
 	t.Helper()
 
 	err := exec.Command("ifconfig", intf, "alias", ipAddressCIDR).Run()
-	require.NoError(t, err, "Failed to create loopback alias")
+	require.NoError(t, err, "Failed to create loopback alias: %s -> %s", ipAddressCIDR, intf)
 
 	t.Cleanup(func() {
 		err := exec.Command("ifconfig", intf, ipAddressCIDR, "-alias").Run()
-		assert.NoError(t, err, "Failed to remove loopback alias")
+		assert.NoError(t, err, "Failed to remove loopback alias: %s -> %s", ipAddressCIDR, intf)
 	})
 
 	return "lo0"

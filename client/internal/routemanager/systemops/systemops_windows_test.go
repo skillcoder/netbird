@@ -121,14 +121,16 @@ var testCases = []testCase{
 func TestRouting(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			setupTestEnv(t)
+			ctx := context.Background()
+
+			setupTestEnv(ctx, t)
 
 			route, err := fetchOriginalGateway()
 			require.NoError(t, err, "Failed to fetch original gateway")
 			ip, err := fetchInterfaceIP(route.InterfaceAlias)
 			require.NoError(t, err, "Failed to fetch interface IP")
 
-			output := testRoute(t, tc.destination, tc.dialer)
+			output := testRoute(ctx, t, tc.destination, tc.dialer)
 			if tc.expectedInterface == expectedExtInt {
 				verifyOutput(t, output, ip, tc.expectedDestPrefix, route.NextHop, route.InterfaceAlias)
 			} else {
@@ -150,10 +152,10 @@ func fetchInterfaceIP(interfaceAlias string) (string, error) {
 	return ip, nil
 }
 
-func testRoute(t *testing.T, destination string, dialer dialer) *FindNetRouteOutput {
+func testRoute(ctx context.Context, t *testing.T, destination string, dialer dialer) *FindNetRouteOutput {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	conn, err := dialer.DialContext(ctx, "udp", destination)

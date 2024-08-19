@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/netip"
@@ -56,15 +57,15 @@ var prefixList []netip.Prefix
 var lastUpdate time.Time
 var mux = sync.Mutex{}
 
-func (r *SysOps) SetupRouting(initAddresses []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
-	return r.setupRefCounter(initAddresses)
+func (r *SysOps) SetupRouting(ctx context.Context, initAddresses []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
+	return r.setupRefCounter(ctx, initAddresses)
 }
 
-func (r *SysOps) CleanupRouting() error {
-	return r.cleanupRefCounter()
+func (r *SysOps) CleanupRouting(ctx context.Context) error {
+	return r.cleanupRefCounter(ctx)
 }
 
-func (r *SysOps) addToRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) addToRouteTable(_ context.Context, prefix netip.Prefix, nexthop Nexthop) error {
 	if nexthop.IP.Zone() != "" && nexthop.Intf == nil {
 		zone, err := strconv.Atoi(nexthop.IP.Zone())
 		if err != nil {
@@ -76,7 +77,7 @@ func (r *SysOps) addToRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
 	return addRouteCmd(prefix, nexthop)
 }
 
-func (r *SysOps) removeFromRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) removeFromRouteTable(ctx context.Context, prefix netip.Prefix, nexthop Nexthop) error {
 	args := []string{"delete", prefix.String()}
 	if nexthop.IP.IsValid() {
 		ip := nexthop.IP.WithZone("")

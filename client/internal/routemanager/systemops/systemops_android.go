@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"runtime"
@@ -12,19 +13,19 @@ import (
 	nbnet "github.com/netbirdio/netbird/util/net"
 )
 
-func (r *SysOps) SetupRouting([]net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
+func (r *SysOps) SetupRouting(context.Context, []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
 	return nil, nil, nil
 }
 
-func (r *SysOps) CleanupRouting() error {
+func (r *SysOps) CleanupRouting(context.Context) error {
 	return nil
 }
 
-func (r *SysOps) AddVPNRoute(netip.Prefix, *net.Interface) error {
+func (r *SysOps) AddVPNRoute(context.Context, netip.Prefix, *net.Interface) error {
 	return nil
 }
 
-func (r *SysOps) RemoveVPNRoute(netip.Prefix, *net.Interface) error {
+func (r *SysOps) RemoveVPNRoute(context.Context, netip.Prefix, *net.Interface) error {
 	return nil
 }
 

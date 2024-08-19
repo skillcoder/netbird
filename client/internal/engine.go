@@ -1245,7 +1245,7 @@ func (e *Engine) close() {
 	}
 
 	if e.routeManager != nil {
-		e.routeManager.Stop()
+		e.routeManager.Stop(context.Background())
 	}
 
 	log.Debugf("removing Netbird interface %s", e.config.WgIfaceName)

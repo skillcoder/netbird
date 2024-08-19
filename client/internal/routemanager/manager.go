@@ -36,7 +36,7 @@ type Manager interface {
 	SetRouteChangeListener(listener listener.NetworkChangeListener)
 	InitialRouteRange() []string
 	EnableServerRouter(firewall firewall.Manager) error
-	Stop()
+	Stop(ctx context.Context)
 }
 
 // DefaultManager is the default instance of a route manager
@@ -83,20 +83,20 @@ func NewManager(
 	}
 
 	dm.routeRefCounter = refcounter.New(
-		func(prefix netip.Prefix, _ any) (any, error) {
-			return nil, sysOps.AddVPNRoute(prefix, wgInterface.ToInterface())
+		func(ctx context.Context, prefix netip.Prefix, _ any) (any, error) {
+			return nil, sysOps.AddVPNRoute(ctx, prefix, wgInterface.ToInterface())
 		},
-		func(prefix netip.Prefix, _ any) error {
-			return sysOps.RemoveVPNRoute(prefix, wgInterface.ToInterface())
+		func(ctx context.Context, prefix netip.Prefix, _ any) error {
+			return sysOps.RemoveVPNRoute(ctx, prefix, wgInterface.ToInterface())
 		},
 	)
 
 	dm.allowedIPsRefCounter = refcounter.New(
-		func(prefix netip.Prefix, peerKey string) (string, error) {
+		func(_ context.Context, prefix netip.Prefix, peerKey string) (string, error) {
 			// save peerKey to use it in the remove function
 			return peerKey, wgInterface.AddAllowedIP(peerKey, prefix.String())
 		},
-		func(prefix netip.Prefix, peerKey string) error {
+		func(_ context.Context, prefix netip.Prefix, peerKey string) error {
 			if err := wgInterface.RemoveAllowedIP(peerKey, prefix.String()); err != nil {
 				if !errors.Is(err, iface.ErrPeerNotFound) && !errors.Is(err, iface.ErrAllowedIPNotFound) {
 					return err
@@ -120,7 +120,7 @@ func (m *DefaultManager) Init() (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error)
 		return nil, nil, nil
 	}
 
-	if err := m.sysOps.CleanupRouting(); err != nil {
+	if err := m.sysOps.CleanupRouting(m.ctx); err != nil {
 		log.Warnf("Failed cleaning up routing: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func (m *DefaultManager) Init() (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error)
 	signalAddress := m.statusRecorder.GetSignalState().URL
 	ips := resolveURLsToIPs([]string{mgmtAddress, signalAddress})
 
-	beforePeerHook, afterPeerHook, err := m.sysOps.SetupRouting(ips)
+	beforePeerHook, afterPeerHook, err := m.sysOps.SetupRouting(m.ctx, ips)
 	if err != nil {
 		return nil, nil, fmt.Errorf("setup routing: %w", err)
 	}
@@ -146,25 +146,25 @@ func (m *DefaultManager) EnableServerRouter(firewall firewall.Manager) error {
 }
 
 // Stop stops the manager watchers and clean firewall rules
-func (m *DefaultManager) Stop() {
+func (m *DefaultManager) Stop(ctx context.Context) {
 	m.stop()
 	if m.serverRouter != nil {
 		m.serverRouter.cleanUp()
 	}
 
 	if m.routeRefCounter != nil {
-		if err := m.routeRefCounter.Flush(); err != nil {
+		if err := m.routeRefCounter.Flush(ctx); err != nil {
 			log.Errorf("Error flushing route ref counter: %v", err)
 		}
 	}
 	if m.allowedIPsRefCounter != nil {
-		if err := m.allowedIPsRefCounter.Flush(); err != nil {
+		if err := m.allowedIPsRefCounter.Flush(ctx); err != nil {
 			log.Errorf("Error flushing allowed IPs ref counter: %v", err)
 		}
 	}
 
 	if !nbnet.CustomRoutingDisabled() {
-		if err := m.sysOps.CleanupRouting(); err != nil {
+		if err := m.sysOps.CleanupRouting(ctx); err != nil {
 			log.Errorf("Error cleaning up routing: %v", err)
 		} else {
 			log.Info("Routing cleanup complete")

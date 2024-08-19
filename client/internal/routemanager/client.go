@@ -35,9 +35,9 @@ type routesUpdate struct {
 type RouteHandler interface {
 	String() string
 	AddRoute(ctx context.Context) error
-	RemoveRoute() error
-	AddAllowedIPs(peerKey string) error
-	RemoveAllowedIPs() error
+	RemoveRoute(ctx context.Context) error
+	AddAllowedIPs(ctx context.Context, peerKey string) error
+	RemoveAllowedIPs(ctx context.Context) error
 }
 
 type clientNetwork struct {
@@ -211,7 +211,7 @@ func (c *clientNetwork) startPeersStatusChangeWatcher() {
 func (c *clientNetwork) removeRouteFromWireguardPeer() error {
 	c.removeStateRoute()
 
-	if err := c.handler.RemoveAllowedIPs(); err != nil {
+	if err := c.handler.RemoveAllowedIPs(c.ctx); err != nil {
 		return fmt.Errorf("remove allowed IPs: %w", err)
 	}
 	return nil
@@ -227,7 +227,7 @@ func (c *clientNetwork) removeRouteFromPeerAndSystem() error {
 	if err := c.removeRouteFromWireguardPeer(); err != nil {
 		merr = multierror.Append(merr, fmt.Errorf("remove allowed IPs for peer %s: %w", c.currentChosen.Peer, err))
 	}
-	if err := c.handler.RemoveRoute(); err != nil {
+	if err := c.handler.RemoveRoute(c.ctx); err != nil {
 		merr = multierror.Append(merr, fmt.Errorf("remove route: %w", err))
 	}
 
@@ -270,7 +270,7 @@ func (c *clientNetwork) recalculateRouteAndUpdatePeerAndSystem() error {
 
 	c.currentChosen = c.routes[newChosenID]
 
-	if err := c.handler.AddAllowedIPs(c.currentChosen.Peer); err != nil {
+	if err := c.handler.AddAllowedIPs(c.ctx, c.currentChosen.Peer); err != nil {
 		return fmt.Errorf("add allowed IPs for peer %s: %w", c.currentChosen.Peer, err)
 	}
 

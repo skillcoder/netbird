@@ -65,7 +65,7 @@ func (m *MockManager) EnableServerRouter(firewall firewall.Manager) error {
 }
 
 // Stop mock implementation of Stop from Manager interface
-func (m *MockManager) Stop() {
+func (m *MockManager) Stop(_ context.Context) {
 	if m.StopFunc != nil {
 		m.StopFunc()
 	}

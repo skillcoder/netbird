@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"runtime"
@@ -12,37 +13,37 @@ import (
 	nbnet "github.com/netbirdio/netbird/util/net"
 )
 
-func (r *SysOps) SetupRouting([]net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
+func (r *SysOps) SetupRouting(context.Context, []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.prefixes = make(map[netip.Prefix]struct{})
 	return nil, nil, nil
 }
 
-func (r *SysOps) CleanupRouting() error {
+func (r *SysOps) CleanupRouting(ctx context.Context) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.prefixes = make(map[netip.Prefix]struct{})
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 
-func (r *SysOps) AddVPNRoute(prefix netip.Prefix, _ *net.Interface) error {
+func (r *SysOps) AddVPNRoute(ctx context.Context, prefix netip.Prefix, _ *net.Interface) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	r.prefixes[prefix] = struct{}{}
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 
-func (r *SysOps) RemoveVPNRoute(prefix netip.Prefix, _ *net.Interface) error {
+func (r *SysOps) RemoveVPNRoute(ctx context.Context, prefix netip.Prefix, _ *net.Interface) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	delete(r.prefixes, prefix)
-	r.notify()
+	r.notify(ctx)
 	return nil
 }
 
@@ -55,7 +56,7 @@ func IsAddrRouted(netip.Addr, []netip.Prefix) (bool, netip.Prefix) {
 	return false, netip.Prefix{}
 }
 
-func (r *SysOps) notify() {
+func (r *SysOps) notify(_ context.Context) {
 	prefixes := make([]netip.Prefix, 0, len(r.prefixes))
 	for prefix := range r.prefixes {
 		prefixes = append(prefixes, prefix)

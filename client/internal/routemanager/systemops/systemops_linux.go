@@ -4,6 +4,7 @@ package systemops
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -85,10 +86,10 @@ func getSetupRules() []ruleParams {
 // Rule 2 (VPN Traffic Routing): Directs all remaining traffic to the 'NetbirdVPNTableID' custom routing table.
 // This table is where a default route or other specific routes received from the management server are configured,
 // enabling VPN connectivity.
-func (r *SysOps) SetupRouting(initAddresses []net.IP) (_ nbnet.AddHookFunc, _ nbnet.RemoveHookFunc, err error) {
+func (r *SysOps) SetupRouting(ctx context.Context, initAddresses []net.IP) (_ nbnet.AddHookFunc, _ nbnet.RemoveHookFunc, err error) {
 	if isLegacy() {
 		log.Infof("Using legacy routing setup")
-		return r.setupRefCounter(initAddresses)
+		return r.setupRefCounter(ctx, initAddresses)
 	}
 
 	if err = addRoutingTableName(); err != nil {
@@ -104,7 +105,7 @@ func (r *SysOps) SetupRouting(initAddresses []net.IP) (_ nbnet.AddHookFunc, _ nb
 
 	defer func() {
 		if err != nil {
-			if cleanErr := r.CleanupRouting(); cleanErr != nil {
+			if cleanErr := r.CleanupRouting(ctx); cleanErr != nil {
 				log.Errorf("Error cleaning up routing: %v", cleanErr)
 			}
 		}
@@ -116,7 +117,7 @@ func (r *SysOps) SetupRouting(initAddresses []net.IP) (_ nbnet.AddHookFunc, _ nb
 			if errors.Is(err, syscall.EOPNOTSUPP) {
 				log.Warnf("Rule operations are not supported, falling back to the legacy routing setup")
 				setIsLegacy(true)
-				return r.setupRefCounter(initAddresses)
+				return r.setupRefCounter(ctx, initAddresses)
 			}
 			return nil, nil, fmt.Errorf("%s: %w", rule.description, err)
 		}
@@ -128,9 +129,9 @@ func (r *SysOps) SetupRouting(initAddresses []net.IP) (_ nbnet.AddHookFunc, _ nb
 // CleanupRouting performs a thorough cleanup of the routing configuration established by 'setupRouting'.
 // It systematically removes the three rules and any associated routing table entries to ensure a clean state.
 // The function uses error aggregation to report any errors encountered during the cleanup process.
-func (r *SysOps) CleanupRouting() error {
+func (r *SysOps) CleanupRouting(ctx context.Context) error {
 	if isLegacy() {
-		return r.cleanupRefCounter()
+		return r.cleanupRefCounter(ctx)
 	}
 
 	var result *multierror.Error
@@ -158,17 +159,17 @@ func (r *SysOps) CleanupRouting() error {
 	return nberrors.FormatErrorOrNil(result)
 }
 
-func (r *SysOps) addToRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) addToRouteTable(_ context.Context, prefix netip.Prefix, nexthop Nexthop) error {
 	return addRoute(prefix, nexthop, syscall.RT_TABLE_MAIN)
 }
 
-func (r *SysOps) removeFromRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
+func (r *SysOps) removeFromRouteTable(_ context.Context, prefix netip.Prefix, nexthop Nexthop) error {
 	return removeRoute(prefix, nexthop, syscall.RT_TABLE_MAIN)
 }
 
-func (r *SysOps) AddVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
+func (r *SysOps) AddVPNRoute(ctx context.Context, prefix netip.Prefix, intf *net.Interface) error {
 	if isLegacy() {
-		return r.genericAddVPNRoute(prefix, intf)
+		return r.genericAddVPNRoute(ctx, prefix, intf)
 	}
 
 	if sysctlFailed && (prefix == vars.Defaultv4 || prefix == vars.Defaultv6) {
@@ -189,9 +190,9 @@ func (r *SysOps) AddVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
 	return nil
 }
 
-func (r *SysOps) RemoveVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
+func (r *SysOps) RemoveVPNRoute(ctx context.Context, prefix netip.Prefix, intf *net.Interface) error {
 	if isLegacy() {
-		return r.genericRemoveVPNRoute(prefix, intf)
+		return r.genericRemoveVPNRoute(ctx, prefix, intf)
 	}
 
 	// TODO remove this once we have ipv6 support

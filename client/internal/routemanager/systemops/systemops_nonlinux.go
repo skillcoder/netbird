@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"context"
 	"net"
 	"net/netip"
 	"runtime"
@@ -10,12 +11,12 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-func (r *SysOps) AddVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
-	return r.genericAddVPNRoute(prefix, intf)
+func (r *SysOps) AddVPNRoute(ctx context.Context, prefix netip.Prefix, intf *net.Interface) error {
+	return r.genericAddVPNRoute(ctx, prefix, intf)
 }
 
-func (r *SysOps) RemoveVPNRoute(prefix netip.Prefix, intf *net.Interface) error {
-	return r.genericRemoveVPNRoute(prefix, intf)
+func (r *SysOps) RemoveVPNRoute(ctx context.Context, prefix netip.Prefix, intf *net.Interface) error {
+	return r.genericRemoveVPNRoute(ctx, prefix, intf)
 }
 
 func EnableIPForwarding() error {
