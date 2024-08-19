@@ -15,6 +15,24 @@ type Nexthop struct {
 	Intf *net.Interface
 }
 
+const undefinedNexthopInterface = "NHUNDEF"
+
+func (nh Nexthop) String() string {
+	if !nh.IP.IsValid() {
+		if nh.Intf == nil {
+			return undefinedNexthopInterface
+		}
+
+		return nh.Intf.Name
+	}
+
+	if nh.Intf == nil {
+		return nh.IP.String() + " " + undefinedNexthopInterface
+	}
+
+	return nh.IP.String() + " " + nh.Intf.Name
+}
+
 type ExclusionCounter = refcounter.Counter[any, Nexthop]
 
 type SysOps struct {

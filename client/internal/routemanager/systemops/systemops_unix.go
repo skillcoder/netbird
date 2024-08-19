@@ -3,6 +3,7 @@
 package systemops
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -14,6 +15,10 @@ import (
 	log "github.com/sirupsen/logrus"
 
 	nbnet "github.com/netbirdio/netbird/util/net"
+)
+
+var (
+	errNotInTable = errors.New("not in table")
 )
 
 func (r *SysOps) SetupRouting(initAddresses []net.IP) (nbnet.AddHookFunc, nbnet.RemoveHookFunc, error) {
@@ -29,7 +34,16 @@ func (r *SysOps) addToRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
 }
 
 func (r *SysOps) removeFromRouteTable(prefix netip.Prefix, nexthop Nexthop) error {
-	return r.routeCmd("delete", prefix, nexthop)
+	if err := r.routeCmd("delete", prefix, nexthop); err != nil {
+		if errors.Is(err, errNotInTable) {
+			// ignore error on trying to delete route which not exists
+			return nil
+		}
+
+		return fmt.Errorf("route cmd: %w", err)
+	}
+
+	return nil
 }
 
 func (r *SysOps) routeCmd(action string, prefix netip.Prefix, nexthop Nexthop) error {
@@ -53,6 +67,7 @@ func (r *SysOps) routeCmd(action string, prefix netip.Prefix, nexthop Nexthop) e
 	if err := retryRouteCmd(args); err != nil {
 		return fmt.Errorf("failed to %s route for %s: %w", action, prefix, err)
 	}
+
 	return nil
 }
 
@@ -64,8 +79,13 @@ func retryRouteCmd(args []string) error {
 		if err != nil && strings.Contains(string(out), "sysctl: cannot allocate memory") {
 			return err
 		} else if err != nil {
+			if strings.HasSuffix(string(out), "not in table\n") {
+				return backoff.Permanent(fmt.Errorf("%w: %w", err, errNotInTable))
+			}
+
 			return backoff.Permanent(err)
 		}
+
 		return nil
 	}
 

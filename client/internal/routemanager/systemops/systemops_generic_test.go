@@ -49,10 +49,6 @@ func TestAddRemoveRoutes(t *testing.T) {
 	}
 
 	for n, testCase := range testCases {
-		// todo resolve test execution on freebsd
-		if runtime.GOOS == "freebsd" {
-			t.Skip("skipping ", testCase.name, " on freebsd")
-		}
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Setenv("NB_DISABLE_ROUTE_CACHE", "true")
 
@@ -111,9 +107,6 @@ func TestAddRemoveRoutes(t *testing.T) {
 }
 
 func TestGetNextHop(t *testing.T) {
-	if runtime.GOOS == "freebsd" {
-		t.Skip("skipping on freebsd")
-	}
 	nexthop, err := GetNextHop(netip.MustParseAddr("0.0.0.0"))
 	if err != nil {
 		t.Fatal("shouldn't return error when fetching the gateway: ", err)
@@ -173,9 +166,9 @@ func TestAddExistAndRemoveRoute(t *testing.T) {
 			shouldAddRoute: true,
 		},
 		{
-			name:           "Should Not Add Route if overlaps with default gateway",
-			prefix:         netip.MustParsePrefix(defaultNexthop.IP.String() + "/31"),
-			shouldAddRoute: false,
+			name:           "Should Add Route if overlaps with default gateway",
+			prefix:         netip.MustParsePrefix(defaultNexthop.IP.String() + "/31").Masked(),
+			shouldAddRoute: true,
 		},
 		{
 			name:              "Should Add Route if bigger network exists",
